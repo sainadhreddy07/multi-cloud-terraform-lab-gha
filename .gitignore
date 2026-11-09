@@ -1,0 +1,33 @@
+# Terraform working directories and state
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+
+# Variable files may contain environment-specific values or secrets
+*.tfvars
+*.tfvars.json
+
+# Local Terraform overrides
+*_override.tf
+*_override.tf.json
+override.tf
+override.tf.json
+
+# Credentials and generated files
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+gha-creds-*.json
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

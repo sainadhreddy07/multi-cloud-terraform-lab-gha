@@ -1,0 +1,93 @@
+name: AWS Terraform Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Deploy (plan then automatic apply) or destroy this AWS stack"
+        required: true
+        type: choice
+        default: deploy
+        options:
+          - deploy
+          - destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-aws-state
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: AWS plan and apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/AWS
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_project_name: ${{ vars.AWS_PROJECT_NAME }}
+      TF_VAR_vpc_cidr: ${{ vars.AWS_VPC_CIDR }}
+      TF_VAR_public_subnet_1_cidr: ${{ vars.AWS_PUBLIC_SUBNET_1_CIDR }}
+      TF_VAR_public_subnet_2_cidr: ${{ vars.AWS_PUBLIC_SUBNET_2_CIDR }}
+      TF_VAR_instance_type: ${{ vars.AWS_INSTANCE_TYPE }}
+      TF_VAR_instance_name: ${{ vars.AWS_INSTANCE_NAME }}
+      TF_VAR_alb_name: ${{ vars.AWS_ALB_NAME }}
+      TF_VAR_target_group_name: ${{ vars.AWS_TARGET_GROUP_NAME }}
+      TF_VAR_allowed_http_cidr: ${{ vars.AWS_ALLOWED_HTTP_CIDR }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: gha-multi-cloud-terraform-lab
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="bucket=${{ vars.AWS_TFSTATE_BUCKET }}" \
+            -backend-config="key=${{ vars.AWS_TFSTATE_KEY }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        if: inputs.operation == 'deploy'
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform apply automatically after successful plan
+        if: inputs.operation == 'deploy'
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m tfplan
+
+      - name: Terraform destroy plan
+        if: inputs.operation == 'destroy'
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform destroy
+        if: inputs.operation == 'destroy'
+        run: terraform apply -destroy -input=false -auto-approve -lock-timeout=5m tfplan

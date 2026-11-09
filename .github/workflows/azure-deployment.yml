@@ -1,0 +1,96 @@
+name: Azure Terraform Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Deploy (plan then automatic apply) or destroy this Azure stack"
+        required: true
+        type: choice
+        default: deploy
+        options:
+          - deploy
+          - destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-azure-state
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Azure plan and apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/Azure
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+      TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+      TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
+      TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
+      TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
+      TF_VAR_admin_ssh_public_key: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
+      TF_VAR_vnet_name: ${{ vars.AZURE_VNET_NAME }}
+      TF_VAR_vnet_cidr: ${{ vars.AZURE_VNET_CIDR }}
+      TF_VAR_subnet_name: ${{ vars.AZURE_SUBNET_NAME }}
+      TF_VAR_subnet_cidr: ${{ vars.AZURE_SUBNET_CIDR }}
+      TF_VAR_nsg_name: ${{ vars.AZURE_NSG_NAME }}
+      TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
+      TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
+      TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Azure login using OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ vars.AZURE_TFSTATE_KEY }}"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        if: inputs.operation == 'deploy'
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform apply automatically after successful plan
+        if: inputs.operation == 'deploy'
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m tfplan
+
+      - name: Terraform destroy plan
+        if: inputs.operation == 'destroy'
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform destroy
+        if: inputs.operation == 'destroy'
+        run: terraform apply -destroy -input=false -auto-approve -lock-timeout=5m tfplan

@@ -1,0 +1,96 @@
+name: GCP Terraform Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Deploy (plan then automatic apply) or destroy this GCP stack"
+        required: true
+        type: choice
+        default: deploy
+        options:
+          - deploy
+          - destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-gcp-state
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: GCP plan and apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/GCP
+    env:
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ vars.GCP_REGION }}
+      TF_VAR_zone: ${{ vars.GCP_ZONE }}
+      TF_VAR_vm_name: ${{ vars.GCP_VM_NAME }}
+      TF_VAR_machine_type: ${{ vars.GCP_MACHINE_TYPE }}
+      TF_VAR_vpc_name: ${{ vars.GCP_VPC_NAME }}
+      TF_VAR_subnet_name: ${{ vars.GCP_SUBNET_NAME }}
+      TF_VAR_subnet_cidr: ${{ vars.GCP_SUBNET_CIDR }}
+      TF_VAR_firewall_name: ${{ vars.GCP_FIREWALL_NAME }}
+      TF_VAR_load_balancer_name: ${{ vars.GCP_LB_NAME }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud using Workload Identity Federation
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify Google Cloud identity
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Show active project
+        run: gcloud config get-value project
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="bucket=${{ vars.GCP_TFSTATE_BUCKET }}" \
+            -backend-config="prefix=${{ vars.GCP_TFSTATE_PREFIX }}"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        if: inputs.operation == 'deploy'
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform apply automatically after successful plan
+        if: inputs.operation == 'deploy'
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m tfplan
+
+      - name: Terraform destroy plan
+        if: inputs.operation == 'destroy'
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+
+      - name: Terraform destroy
+        if: inputs.operation == 'destroy'
+        run: terraform apply -destroy -input=false -auto-approve -lock-timeout=5m tfplan
