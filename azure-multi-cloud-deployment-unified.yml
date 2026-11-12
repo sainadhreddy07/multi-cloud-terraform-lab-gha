@@ -1,0 +1,457 @@
+# Unified multi-cloud Terraform pipeline for Azure DevOps.
+# Source layout is unchanged: terraform/Azure, terraform/AWS, terraform/GCP.
+# Requires an authorized Library variable group named: pipevar
+# Requires these service connections (or update the names below):
+#   sc-azure-terraform-wif  = Azure Resource Manager / Workload identity federation
+#   sc-aws-terraform-wif    = AWS service connection / Use OIDC
+#   sc-gcp-wif-token        = Azure Resource Manager / Workload identity federation
+
+trigger: none
+pr: none
+
+parameters:
+  - name: operation
+    displayName: Terraform operation
+    type: string
+    default: plan
+    values:
+      - plan
+      - apply
+      - destroy
+
+variables:
+  - group: pipevar
+  - name: TF_VERSION
+    value: '1.17.1'
+
+stages:
+  # ---------------------------------------------------------------------------
+  # STAGE 1 - PLAN: three independent provider jobs execute in parallel.
+  # For operation=destroy, each job creates a destroy plan instead.
+  # ---------------------------------------------------------------------------
+  - stage: Plan
+    displayName: 'Phase 1 - Plan Azure, AWS and GCP'
+    jobs:
+      - job: Plan_Azure
+        displayName: 'Plan - Azure'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+
+          - task: AzureCLI@2
+            displayName: 'Azure OIDC login, Terraform init, validate and plan'
+            inputs:
+              azureSubscription: 'sc-azure-terraform-wif'
+              scriptType: bash
+              scriptLocation: inlineScript
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/Azure'
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                echo 'Authenticated Azure subscription:'
+                az account show --query '{subscription:id, tenant:tenantId}' --output json
+
+                terraform fmt -check -recursive
+                terraform init -input=false -reconfigure
+                terraform validate
+
+                if [[ "$TF_OPERATION" == "destroy" ]]; then
+                  terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+                else
+                  terraform plan -input=false -lock-timeout=5m -out=tfplan
+                fi
+
+                terraform show -no-color tfplan > tfplan.txt
+                mkdir -p "$PLAN_ARTIFACT_DIR"
+                cp tfplan tfplan.txt "$PLAN_ARTIFACT_DIR/"
+            env:
+              ARM_USE_CLI: 'true'
+              ARM_SUBSCRIPTION_ID: $(AZURE_SUB_ID)
+              ARM_TENANT_ID: $(AZURE_TENANT_ID)
+              ARM_SAS_TOKEN: $(AZURE_TFSTATE_SAS_TOKEN)
+              TF_VAR_location: $(AZURE_LOCATION)
+              TF_VAR_resource_group_name: $(AZURE_RESOURCE_GROUP_NAME)
+              TF_VAR_vm_name: $(AZURE_VM_NAME)
+              TF_VAR_vm_size: $(AZURE_VM_SIZE)
+              TF_VAR_admin_username: $(AZURE_ADMIN_USERNAME)
+              TF_VAR_admin_ssh_public_key: $(AZURE_SSH_PUBLIC_KEY)
+              TF_VAR_vnet_name: $(AZURE_VNET_NAME)
+              TF_VAR_vnet_cidr: $(AZURE_VNET_CIDR)
+              TF_VAR_subnet_name: $(AZURE_SUBNET_NAME)
+              TF_VAR_subnet_cidr: $(AZURE_SUBNET_CIDR)
+              TF_VAR_nsg_name: $(AZURE_NSG_NAME)
+              TF_VAR_nic_name: $(AZURE_NIC_NAME)
+              TF_VAR_load_balancer_name: $(AZURE_LB_NAME)
+              TF_VAR_load_balancer_public_ip_name: $(AZURE_LB_PUBLIC_IP_NAME)
+              TF_OPERATION: ${{ parameters.operation }}
+              PLAN_ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)/plan-azure
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Azure saved plan'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/plan-azure'
+              artifact: 'plan-azure'
+              publishLocation: pipeline
+
+      - job: Plan_AWS
+        displayName: 'Plan - AWS'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+
+          - task: AWSShellScript@1
+            displayName: 'AWS OIDC login, Terraform init, validate and plan'
+            inputs:
+              awsCredentials: 'sc-aws-terraform-wif'
+              regionName: '$(AWS_REGION)'
+              scriptType: inline
+              disableAutoCwd: true
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/AWS'
+              inlineScript: |
+                set -euo pipefail
+                export TF_VAR_region="$AWS_REGION"
+
+                terraform fmt -check -recursive
+                terraform init -input=false -reconfigure
+                terraform validate
+
+                if [[ "$TF_OPERATION" == "destroy" ]]; then
+                  terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+                else
+                  terraform plan -input=false -lock-timeout=5m -out=tfplan
+                fi
+
+                terraform show -no-color tfplan > tfplan.txt
+                mkdir -p "$PLAN_ARTIFACT_DIR"
+                cp tfplan tfplan.txt "$PLAN_ARTIFACT_DIR/"
+            env:
+              AWS_REGION: $(AWS_REGION)
+              AWS_DEFAULT_REGION: $(AWS_REGION)
+              TF_VAR_region: $(AWS_REGION)
+              TF_VAR_project_name: $(AWS_PROJECT_NAME)
+              TF_VAR_vpc_cidr: $(AWS_VPC_CIDR)
+              TF_VAR_public_subnet_1_cidr: $(AWS_PUBLIC_SUBNET_1_CIDR)
+              TF_VAR_public_subnet_2_cidr: $(AWS_PUBLIC_SUBNET_2_CIDR)
+              TF_VAR_instance_type: $(AWS_INSTANCE_TYPE)
+              TF_VAR_instance_name: $(AWS_INSTANCE_NAME)
+              TF_VAR_alb_name: $(AWS_ALB_NAME)
+              TF_VAR_target_group_name: $(AWS_TARGET_GROUP_NAME)
+              TF_VAR_allowed_http_cidr: $(AWS_ALLOWED_HTTP_CIDR)
+              TF_OPERATION: ${{ parameters.operation }}
+              PLAN_ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)/plan-aws
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish AWS saved plan'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/plan-aws'
+              artifact: 'plan-aws'
+              publishLocation: pipeline
+
+      - job: Plan_GCP
+        displayName: 'Plan - GCP'
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+
+          # Google documents this AzureCLI@2 + idToken pattern for Azure DevOps WIF.
+          - task: AzureCLI@2
+            displayName: 'Azure DevOps OIDC to GCP WIF, Terraform init, validate and plan'
+            inputs:
+              azureSubscription: 'sc-gcp-wif-token'
+              scriptType: bash
+              scriptLocation: inlineScript
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/GCP'
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                test -n "${idToken:-}" || { echo 'Azure DevOps did not provide an idToken. Check the WIF service connection.'; exit 1; }
+
+                WIF_JWT_FILE="$(Pipeline.Workspace)/.gcp-workload-identity.jwt"
+                printf '%s' "$idToken" > "$WIF_JWT_FILE"
+                trap 'rm -f "$WIF_JWT_FILE" "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+
+                cat > "$GOOGLE_APPLICATION_CREDENTIALS" <<EOF
+                {
+                  "type": "external_account",
+                  "audience": "//iam.googleapis.com/projects/${GCP_WIF_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_WIF_POOL_ID}/providers/${GCP_WIF_PROVIDER_ID}",
+                  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+                  "token_url": "https://sts.googleapis.com/v1/token",
+                  "credential_source": {
+                    "file": "${WIF_JWT_FILE}"
+                  },
+                  "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${GCP_TERRAFORM_SERVICE_ACCOUNT}:generateAccessToken"
+                }
+                EOF
+
+                export GOOGLE_APPLICATION_CREDENTIALS
+                export CLOUDSDK_CORE_PROJECT="$GCP_PROJECT_ID"
+                echo "GCP project: $CLOUDSDK_CORE_PROJECT"
+
+                terraform fmt -check -recursive
+                terraform init -input=false -reconfigure
+                terraform validate
+
+                if [[ "$TF_OPERATION" == "destroy" ]]; then
+                  terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+                else
+                  terraform plan -input=false -lock-timeout=5m -out=tfplan
+                fi
+
+                terraform show -no-color tfplan > tfplan.txt
+                mkdir -p "$PLAN_ARTIFACT_DIR"
+                cp tfplan tfplan.txt "$PLAN_ARTIFACT_DIR/"
+            env:
+              GCP_PROJECT_ID: $(GCP_PROJECT_ID)
+              GCP_WIF_PROJECT_NUMBER: $(GCP_WIF_PROJECT_NUMBER)
+              GCP_WIF_POOL_ID: $(GCP_WIF_POOL_ID)
+              GCP_WIF_PROVIDER_ID: $(GCP_WIF_PROVIDER_ID)
+              GCP_TERRAFORM_SERVICE_ACCOUNT: $(GCP_TERRAFORM_SERVICE_ACCOUNT)
+              GOOGLE_APPLICATION_CREDENTIALS: $(Pipeline.Workspace)/.gcp-workload-identity.wlconfig
+              TF_VAR_project_id: $(GCP_PROJECT_ID)
+              TF_VAR_region: $(GCP_REGION)
+              TF_VAR_zone: $(GCP_ZONE)
+              TF_VAR_vm_name: $(GCP_VM_NAME)
+              TF_VAR_machine_type: $(GCP_MACHINE_TYPE)
+              TF_VAR_vpc_name: $(GCP_VPC_NAME)
+              TF_VAR_subnet_name: $(GCP_SUBNET_NAME)
+              TF_VAR_subnet_cidr: $(GCP_SUBNET_CIDR)
+              TF_VAR_firewall_name: $(GCP_FIREWALL_NAME)
+              TF_VAR_load_balancer_name: $(GCP_LB_NAME)
+              TF_OPERATION: ${{ parameters.operation }}
+              PLAN_ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)/plan-gcp
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish GCP saved plan'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/plan-gcp'
+              artifact: 'plan-gcp'
+              publishLocation: pipeline
+
+  # ---------------------------------------------------------------------------
+  # STAGE 2 - EXECUTION: one approval gate controls the complete multi-cloud run.
+  # The three provider jobs start only after the matching Environment approves.
+  # ---------------------------------------------------------------------------
+  - stage: Execute
+    displayName: 'Phase 2 - Approved multi-cloud execution'
+    dependsOn: Plan
+    condition: and(succeeded(), ne('${{ parameters.operation }}', 'plan'))
+    jobs:
+      - deployment: ApprovalGate
+        displayName: 'Approval gate - ${{ parameters.operation }}'
+        environment:
+          ${{ if eq(parameters.operation, 'apply') }}:
+            name: terraform-apply
+          ${{ else }}:
+            name: terraform-destroy
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - bash: |
+                    echo "The configured Azure DevOps Environment approval has been granted."
+                    echo "Operation: ${{ parameters.operation }}"
+                  displayName: 'Release execution jobs after approval'
+
+      - job: Execute_Azure
+        displayName: '${{ parameters.operation }} - Azure'
+        dependsOn: ApprovalGate
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Azure reviewed plan'
+            inputs:
+              buildType: current
+              artifactName: plan-azure
+              targetPath: '$(Pipeline.Workspace)/plan-azure'
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+          - task: AzureCLI@2
+            displayName: 'Apply reviewed Azure plan'
+            inputs:
+              azureSubscription: 'sc-azure-terraform-wif'
+              scriptType: bash
+              scriptLocation: inlineScript
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/Azure'
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                az account show --query '{subscription:id, tenant:tenantId}' --output json
+                terraform init -input=false -reconfigure
+                cp "$(Pipeline.Workspace)/plan-azure/tfplan" ./tfplan
+                terraform apply -input=false -lock-timeout=5m tfplan
+                if [[ "$TF_OPERATION" == "apply" ]]; then terraform output; fi
+            env:
+              ARM_USE_CLI: 'true'
+              ARM_SUBSCRIPTION_ID: $(AZURE_SUB_ID)
+              ARM_TENANT_ID: $(AZURE_TENANT_ID)
+              ARM_SAS_TOKEN: $(AZURE_TFSTATE_SAS_TOKEN)
+              TF_VAR_location: $(AZURE_LOCATION)
+              TF_VAR_resource_group_name: $(AZURE_RESOURCE_GROUP_NAME)
+              TF_VAR_vm_name: $(AZURE_VM_NAME)
+              TF_VAR_vm_size: $(AZURE_VM_SIZE)
+              TF_VAR_admin_username: $(AZURE_ADMIN_USERNAME)
+              TF_VAR_admin_ssh_public_key: $(AZURE_SSH_PUBLIC_KEY)
+              TF_VAR_vnet_name: $(AZURE_VNET_NAME)
+              TF_VAR_vnet_cidr: $(AZURE_VNET_CIDR)
+              TF_VAR_subnet_name: $(AZURE_SUBNET_NAME)
+              TF_VAR_subnet_cidr: $(AZURE_SUBNET_CIDR)
+              TF_VAR_nsg_name: $(AZURE_NSG_NAME)
+              TF_VAR_nic_name: $(AZURE_NIC_NAME)
+              TF_VAR_load_balancer_name: $(AZURE_LB_NAME)
+              TF_VAR_load_balancer_public_ip_name: $(AZURE_LB_PUBLIC_IP_NAME)
+              TF_OPERATION: ${{ parameters.operation }}
+
+      - job: Execute_AWS
+        displayName: '${{ parameters.operation }} - AWS'
+        dependsOn: ApprovalGate
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download AWS reviewed plan'
+            inputs:
+              buildType: current
+              artifactName: plan-aws
+              targetPath: '$(Pipeline.Workspace)/plan-aws'
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+          - task: AWSShellScript@1
+            displayName: 'Apply reviewed AWS plan'
+            inputs:
+              awsCredentials: 'sc-aws-terraform-wif'
+              regionName: '$(AWS_REGION)'
+              scriptType: inline
+              disableAutoCwd: true
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/AWS'
+              inlineScript: |
+                set -euo pipefail
+                export TF_VAR_region="$AWS_REGION"
+                terraform init -input=false -reconfigure
+                cp "$(Pipeline.Workspace)/plan-aws/tfplan" ./tfplan
+                terraform apply -input=false -lock-timeout=5m tfplan
+                if [[ "$TF_OPERATION" == "apply" ]]; then terraform output; fi
+            env:
+              AWS_REGION: $(AWS_REGION)
+              AWS_DEFAULT_REGION: $(AWS_REGION)
+              TF_VAR_region: $(AWS_REGION)
+              TF_VAR_project_name: $(AWS_PROJECT_NAME)
+              TF_VAR_vpc_cidr: $(AWS_VPC_CIDR)
+              TF_VAR_public_subnet_1_cidr: $(AWS_PUBLIC_SUBNET_1_CIDR)
+              TF_VAR_public_subnet_2_cidr: $(AWS_PUBLIC_SUBNET_2_CIDR)
+              TF_VAR_instance_type: $(AWS_INSTANCE_TYPE)
+              TF_VAR_instance_name: $(AWS_INSTANCE_NAME)
+              TF_VAR_alb_name: $(AWS_ALB_NAME)
+              TF_VAR_target_group_name: $(AWS_TARGET_GROUP_NAME)
+              TF_VAR_allowed_http_cidr: $(AWS_ALLOWED_HTTP_CIDR)
+              TF_OPERATION: ${{ parameters.operation }}
+
+      - job: Execute_GCP
+        displayName: '${{ parameters.operation }} - GCP'
+        dependsOn: ApprovalGate
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download GCP reviewed plan'
+            inputs:
+              buildType: current
+              artifactName: plan-gcp
+              targetPath: '$(Pipeline.Workspace)/plan-gcp'
+          - bash: |
+              set -euo pipefail
+              curl -fsSLo /tmp/terraform.zip "https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip"
+              unzip -oq /tmp/terraform.zip -d /tmp/terraform-bin
+              sudo install /tmp/terraform-bin/terraform /usr/local/bin/terraform
+              terraform version
+            displayName: 'Install Terraform $(TF_VERSION)'
+          - task: AzureCLI@2
+            displayName: 'Exchange Azure DevOps OIDC token for GCP credentials and apply'
+            inputs:
+              azureSubscription: 'sc-gcp-wif-token'
+              scriptType: bash
+              scriptLocation: inlineScript
+              workingDirectory: '$(Build.SourcesDirectory)/terraform/GCP'
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                test -n "${idToken:-}" || { echo 'Azure DevOps did not provide an idToken. Check the WIF service connection.'; exit 1; }
+
+                WIF_JWT_FILE="$(Pipeline.Workspace)/.gcp-workload-identity.jwt"
+                printf '%s' "$idToken" > "$WIF_JWT_FILE"
+                trap 'rm -f "$WIF_JWT_FILE" "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+                cat > "$GOOGLE_APPLICATION_CREDENTIALS" <<EOF
+                {
+                  "type": "external_account",
+                  "audience": "//iam.googleapis.com/projects/${GCP_WIF_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_WIF_POOL_ID}/providers/${GCP_WIF_PROVIDER_ID}",
+                  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+                  "token_url": "https://sts.googleapis.com/v1/token",
+                  "credential_source": {"file": "${WIF_JWT_FILE}"},
+                  "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${GCP_TERRAFORM_SERVICE_ACCOUNT}:generateAccessToken"
+                }
+                EOF
+                export GOOGLE_APPLICATION_CREDENTIALS
+                export CLOUDSDK_CORE_PROJECT="$GCP_PROJECT_ID"
+
+                terraform init -input=false -reconfigure
+                cp "$(Pipeline.Workspace)/plan-gcp/tfplan" ./tfplan
+                terraform apply -input=false -lock-timeout=5m tfplan
+                if [[ "$TF_OPERATION" == "apply" ]]; then terraform output; fi
+            env:
+              GCP_PROJECT_ID: $(GCP_PROJECT_ID)
+              GCP_WIF_PROJECT_NUMBER: $(GCP_WIF_PROJECT_NUMBER)
+              GCP_WIF_POOL_ID: $(GCP_WIF_POOL_ID)
+              GCP_WIF_PROVIDER_ID: $(GCP_WIF_PROVIDER_ID)
+              GCP_TERRAFORM_SERVICE_ACCOUNT: $(GCP_TERRAFORM_SERVICE_ACCOUNT)
+              GOOGLE_APPLICATION_CREDENTIALS: $(Pipeline.Workspace)/.gcp-workload-identity.wlconfig
+              TF_VAR_project_id: $(GCP_PROJECT_ID)
+              TF_VAR_region: $(GCP_REGION)
+              TF_VAR_zone: $(GCP_ZONE)
+              TF_VAR_vm_name: $(GCP_VM_NAME)
+              TF_VAR_machine_type: $(GCP_MACHINE_TYPE)
+              TF_VAR_vpc_name: $(GCP_VPC_NAME)
+              TF_VAR_subnet_name: $(GCP_SUBNET_NAME)
+              TF_VAR_subnet_cidr: $(GCP_SUBNET_CIDR)
+              TF_VAR_firewall_name: $(GCP_FIREWALL_NAME)
+              TF_VAR_load_balancer_name: $(GCP_LB_NAME)
+              TF_OPERATION: ${{ parameters.operation }}
