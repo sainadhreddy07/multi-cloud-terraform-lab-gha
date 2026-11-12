@@ -4,13 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Choose Terraform operation"
+        description: "Deploy (plan then automatic apply) or destroy this Azure stack"
         required: true
         type: choice
-        default: plan
+        default: deploy
         options:
-          - plan
-          - apply
+          - deploy
           - destroy
 
 permissions:
@@ -21,66 +20,44 @@ concurrency:
   group: terraform-azure-state
   cancel-in-progress: false
 
-# Existing GitHub repository Variables and Secrets are reused unchanged.
-# Terraform backend settings remain in terraform/Azure/backend.tf.
-env:
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_USE_OIDC: "true"
-  ARM_SAS_TOKEN: ${{ secrets.AZURE_TFSTATE_SAS_TOKEN }}
-
-  TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-  TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}S
-  TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
-  TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
-  TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
-  TF_VAR_admin_ssh_public_key: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
-  TF_VAR_vnet_name: ${{ vars.AZURE_VNET_NAME }}
-  TF_VAR_vnet_cidr: ${{ vars.AZURE_VNET_CIDR }}
-  TF_VAR_subnet_name: ${{ vars.AZURE_SUBNET_NAME }}
-  TF_VAR_subnet_cidr: ${{ vars.AZURE_SUBNET_CIDR }}
-  TF_VAR_nsg_name: ${{ vars.AZURE_NSG_NAME }}
-  TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
-  TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
-  TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
-
 jobs:
-  plan:
-    name: "Stage 1 - Terraform Plan"
-    if: ${{ inputs.operation == 'plan' }}
+  terraform:
+    name: Azure plan and apply
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: terraform/Azure
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+      TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+      TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
+      TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
+      TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
+      TF_VAR_admin_ssh_public_key: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
+      TF_VAR_vnet_name: ${{ vars.AZURE_VNET_NAME }}
+      TF_VAR_vnet_cidr: ${{ vars.AZURE_VNET_CIDR }}
+      TF_VAR_subnet_name: ${{ vars.AZURE_SUBNET_NAME }}
+      TF_VAR_subnet_cidr: ${{ vars.AZURE_SUBNET_CIDR }}
+      TF_VAR_nsg_name: ${{ vars.AZURE_NSG_NAME }}
+      TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
+      TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
+      TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login using OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Verify Azure subscription identity
-        run: az account show --query "{subscription:id, tenant:tenantId, user:user.name}" --output json
-
-      - name: Verify required configuration
-        shell: bash
-        run: |
-          for name in \
-            TF_VAR_location TF_VAR_resource_group_name TF_VAR_vm_name TF_VAR_vm_size \
-            TF_VAR_admin_username TF_VAR_admin_ssh_public_key TF_VAR_vnet_name \
-            TF_VAR_vnet_cidr TF_VAR_subnet_name TF_VAR_subnet_cidr TF_VAR_nsg_name \
-            TF_VAR_nic_name TF_VAR_load_balancer_name TF_VAR_load_balancer_public_ip_name \
-            ARM_SAS_TOKEN; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error title=Missing configuration::$name is empty. Check GitHub Variables/Secrets."
-              exit 1
-            fi
-          done
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -88,125 +65,32 @@ jobs:
           terraform_version: 1.17.1
           terraform_wrapper: false
 
-      - name: Terraform format check
+      - name: Check formatting
         run: terraform fmt -check -recursive
 
       - name: Terraform init
-        run: terraform init -input=false -reconfigure
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.AZURE_TFSTATE_CONTAINER }}" \
+            -backend-config="key=${{ vars.AZURE_TFSTATE_KEY }}"
 
       - name: Terraform validate
         run: terraform validate
 
       - name: Terraform plan
+        if: inputs.operation == 'deploy'
         run: terraform plan -input=false -lock-timeout=5m -out=tfplan
 
-      - name: Display plan for review
-        run: terraform show -no-color tfplan
-
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: azure-tfplan
-          path: terraform/Azure/tfplan
-          if-no-files-found: error
-          retention-days: 1
-
-  apply:
-    name: "Stage 2 - Terraform Apply"
-    if: ${{ inputs.operation == 'apply' }}
-    needs: plan
-    runs-on: ubuntu-latest
-    # Optional safety gate: configure required reviewers in this GitHub Environment.
-    environment: terraform-apply
-    defaults:
-      run:
-        working-directory: terraform/Azure
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Azure login using OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.17.1
-          terraform_wrapper: false
-
-      - name: Terraform init
-        run: terraform init -input=false -reconfigure
-
-      - name: Download reviewed plan
-        uses: actions/download-artifact@v4
-        with:
-          name: azure-tfplan
-          path: terraform/Azure
-
-      - name: Apply reviewed saved plan
-        run: terraform apply -input=false -lock-timeout=5m tfplan
-
-      - name: Display Terraform outputs
-        run: terraform output
-
-      - name: Display Load Balancer URL
-        run: terraform output -raw load_balancer_url
-
-  destroy:
-    name: "Stage 3 - Terraform Destroy (separate run)"
-    if: ${{ inputs.operation == 'destroy' }}
-    runs-on: ubuntu-latest
-    # Optional safety gate: configure required reviewers in this GitHub Environment.
-    environment: terraform-destroy
-    defaults:
-      run:
-        working-directory: terraform/Azure
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Azure login using OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Verify Azure subscription identity
-        run: az account show --query "{subscription:id, tenant:tenantId, user:user.name}" --output json
-
-      - name: Verify required backend credential
-        shell: bash
-        run: |
-          if [[ -z "${ARM_SAS_TOKEN:-}" ]]; then
-            echo "::error title=Missing backend credential::AZURE_TFSTATE_SAS_TOKEN is empty."
-            exit 1
-          fi
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.17.1
-          terraform_wrapper: false
-
-      - name: Terraform init
-        run: terraform init -input=false -reconfigure
-
-      - name: Terraform validate
-        run: terraform validate
+      - name: Terraform apply automatically after successful plan
+        if: inputs.operation == 'deploy'
+        run: terraform apply -input=false -auto-approve -lock-timeout=5m tfplan
 
       - name: Terraform destroy plan
-        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tf-destroy-plan
+        if: inputs.operation == 'destroy'
+        run: terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
 
-      - name: Display destroy plan - review carefully
-        run: terraform show -no-color tf-destroy-plan
-
-      - name: Apply destroy plan
-        run: terraform apply -input=false -auto-approve -lock-timeout=5m tf-destroy-plan
-
-      - name: Verify state after destroy
-        run: terraform state list
+      - name: Terraform destroy
+        if: inputs.operation == 'destroy'
+        run: terraform apply -destroy -input=false -auto-approve -lock-timeout=5m tfplan
