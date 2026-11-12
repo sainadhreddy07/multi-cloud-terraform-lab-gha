@@ -1,16 +1,16 @@
 resource "azurerm_linux_virtual_machine" "linux" {
-  name                            = var.vm_name
-  computer_name                   = substr(var.vm_name, 0, 15)
- 
-  resource_group_name             = var.resource_group_name
- 
-  location                        = var.location
-  size                            = var.vm_size
- 
+  name          = var.vm_name
+  computer_name = substr(var.vm_name, 0, 15)
+
+  resource_group_name = var.resource_group_name
+
+  location = var.location
+  size     = var.vm_size
+
   admin_username                  = var.admin_username
   disable_password_authentication = true
- 
-  network_interface_ids           = [var.linux_nic_id]
+
+  network_interface_ids = [var.linux_nic_id]
 
   custom_data = base64encode(<<-CUSTOMDATA
     #!/bin/bash
@@ -50,5 +50,5 @@ resource "azurerm_virtual_machine_data_disk_attachment" "data" {
   managed_disk_id    = var.data_disk_ids[count.index]
   virtual_machine_id = azurerm_linux_virtual_machine.linux.id
   lun                = count.index
-  caching             = "ReadWrite"
+  caching            = "ReadWrite"
 }

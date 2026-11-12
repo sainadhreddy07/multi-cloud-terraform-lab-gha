@@ -57,32 +57,32 @@ module "data_disks" {
 }
 
 module "load_balancer" {
-  source                       = "./modules/load-balancer"
-  resource_group_name           = module.resource_group.name
-  location                      = module.resource_group.location
-  load_balancer_name            = var.load_balancer_name
-  load_balancer_public_ip_name  = var.load_balancer_public_ip_name
-  linux_nic_id                  = module.nics.linux_nic_id
+  source                          = "./modules/load-balancer"
+  resource_group_name             = module.resource_group.name
+  location                        = module.resource_group.location
+  load_balancer_name              = var.load_balancer_name
+  load_balancer_public_ip_name    = var.load_balancer_public_ip_name
+  linux_nic_id                    = module.nics.linux_nic_id
   linux_nic_ip_configuration_name = module.nics.linux_ip_configuration_name
 }
 
 module "vms" {
   source                 = "./modules/compute/vms"
-  vm_name               = var.vm_name
-  vm_size               = var.vm_size
-  admin_username        = var.admin_username
-  admin_ssh_public_key  = var.admin_ssh_public_key
-  resource_group_name   = module.resource_group.name
-  location              = module.resource_group.location
-  linux_nic_id          = module.nics.linux_nic_id
-  os_disk_settings      = module.os_disk.os_disk_settings
-  windows_nic_id        = module.nics.windows_nic_id
-  create_windows_vm     = var.create_windows_vm
-  windows_vm_name       = var.windows_vm_name
-  windows_vm_size       = var.windows_vm_size
+  vm_name                = var.vm_name
+  vm_size                = var.vm_size
+  admin_username         = var.admin_username
+  admin_ssh_public_key   = var.admin_ssh_public_key
+  resource_group_name    = module.resource_group.name
+  location               = module.resource_group.location
+  linux_nic_id           = module.nics.linux_nic_id
+  os_disk_settings       = module.os_disk.os_disk_settings
+  windows_nic_id         = module.nics.windows_nic_id
+  create_windows_vm      = var.create_windows_vm
+  windows_vm_name        = var.windows_vm_name
+  windows_vm_size        = var.windows_vm_size
   windows_admin_username = var.windows_admin_username
   windows_admin_password = var.windows_admin_password
-  data_disk_ids         = module.data_disks.data_disk_ids
+  data_disk_ids          = module.data_disks.data_disk_ids
   depends_on = [
     module.nsg,
     module.load_balancer

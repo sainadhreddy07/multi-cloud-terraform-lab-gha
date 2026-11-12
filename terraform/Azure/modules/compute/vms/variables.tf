@@ -2,9 +2,9 @@ variable "vm_name" { type = string }
 variable "vm_size" { type = string }
 variable "admin_username" { type = string }
 
-variable "admin_ssh_public_key" { 
-  type = string
-  sensitive = true 
+variable "admin_ssh_public_key" {
+  type      = string
+  sensitive = true
 }
 
 variable "resource_group_name" { type = string }
@@ -26,12 +26,12 @@ variable "windows_vm_size" { type = string }
 variable "windows_admin_username" { type = string }
 
 variable "windows_admin_password" {
-  type = string
+  type      = string
   sensitive = true
-  default = null
+  default   = null
 }
 
 variable "data_disk_ids" {
-  type = list(string)
+  type    = list(string)
   default = []
 }

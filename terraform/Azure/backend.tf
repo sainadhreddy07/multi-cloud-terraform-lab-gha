@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "azurerm" {
-    resource_group_name   = "rg-tfstate-shared"
+    resource_group_name  = "rg-tfstate-shared"
     storage_account_name = "multicloudstorage001"
     container_name       = "tfstate"
     key                  = "multi-cloud-terraform-lab-gha/azure.tfstate"
