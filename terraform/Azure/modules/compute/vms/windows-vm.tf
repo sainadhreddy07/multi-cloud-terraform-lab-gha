@@ -1,5 +1,4 @@
 resource "azurerm_windows_virtual_machine" "windows" {
-  count         = var.create_windows_vm ? 1 : 0
   name          = var.windows_vm_name
   computer_name = substr(var.windows_vm_name, 0, 15)
 

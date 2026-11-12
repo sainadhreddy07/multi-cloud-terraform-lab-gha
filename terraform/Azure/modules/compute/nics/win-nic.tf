@@ -1,5 +1,4 @@
 resource "azurerm_network_interface" "windows" {
-  count               = var.create_windows_vm ? 1 : 0
   name                = var.windows_nic_name
   location            = var.location
   resource_group_name = var.resource_group_name

@@ -34,7 +34,6 @@ resource "azurerm_network_interface_security_group_association" "linux" {
 }
 
 resource "azurerm_network_interface_security_group_association" "windows" {
-  count                     = var.create_windows_vm ? 1 : 0
   network_interface_id      = var.windows_nic_id
   network_security_group_id = azurerm_network_security_group.web.id
 }
