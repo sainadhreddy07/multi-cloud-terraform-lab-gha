@@ -27,15 +27,14 @@ variable "windows_vm_size" { type = string }
 variable "windows_admin_username" {
   description = "Temporary Windows VM administrator username"
   type        = string
-  sensitive   = true
-  default     = "azdmoduser"
+  default     = "azurelabuser"
 }
 
 variable "windows_admin_password" {
   description = "Temporary Windows VM administrator password"
   type        = string
   sensitive   = true
-  default     = "LabWin@2026Test"
+  nullable    = false
 }
 
 variable "data_disk_ids" {

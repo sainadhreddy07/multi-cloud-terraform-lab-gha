@@ -78,10 +78,10 @@ variable "windows_admin_username" {
   default     = "azureadmin"
 }
 variable "windows_admin_password" {
-  description = "Administrator password for optional Windows VM (supply via secret TF_VAR)."
+  description = "Administrator password for the Windows VM."
   type        = string
   sensitive   = true
-  default     = null
+  nullable    = false
 }
 variable "windows_nic_name" {
   description = "NIC name for optional Windows VM."

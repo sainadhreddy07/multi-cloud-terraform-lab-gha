@@ -44,6 +44,7 @@ env:
   TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
   TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
   TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
+  TF_VAR_windows_admin_password: ${{ secrets.WINDOWS_ADMIN_PASSWORD }}
 
 jobs:
   plan:
