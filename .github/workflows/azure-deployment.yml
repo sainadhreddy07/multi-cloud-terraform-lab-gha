@@ -49,7 +49,7 @@ env:
 jobs:
   plan:
     name: "Stage 1 - Terraform Plan"
-    if: ${{ inputs.operation == 'plan' }}
+    if: ${{ inputs.operation == 'plan' || inputs.operation == 'apply' }}
     runs-on: ubuntu-latest
     defaults:
       run:
