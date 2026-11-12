@@ -1,176 +1,90 @@
-resource "azurerm_resource_group" "lab" {
-  name     = var.resource_group_name
-  location = var.location
+# Root module: orchestration only. Each resource is defined in the exact requested module folders.
+
+module "resource_group" {
+  source              = "./modules/resources"
+  resource_group_name = var.resource_group_name
+  location            = var.location
 }
 
-resource "azurerm_virtual_network" "lab" {
-  name                = var.vnet_name
-  address_space       = [var.vnet_cidr]
-  location            = azurerm_resource_group.lab.location
-  resource_group_name = azurerm_resource_group.lab.name
+module "vnet" {
+  source              = "./modules/network/vnet"
+  vnet_name           = var.vnet_name
+  vnet_cidr           = var.vnet_cidr
+  resource_group_name = module.resource_group.name
+  location            = module.resource_group.location
 }
 
-resource "azurerm_subnet" "web" {
-  name                 = var.subnet_name
-  resource_group_name  = azurerm_resource_group.lab.name
-  virtual_network_name = azurerm_virtual_network.lab.name
-  address_prefixes     = [var.subnet_cidr]
+module "subnet" {
+  source              = "./modules/network/subnet"
+  subnet_name         = var.subnet_name
+  subnet_cidr         = var.subnet_cidr
+  resource_group_name = module.resource_group.name
+  vnet_name           = module.vnet.name
 }
 
-resource "azurerm_network_security_group" "web" {
-  name                = var.nsg_name
-  location            = azurerm_resource_group.lab.location
-  resource_group_name = azurerm_resource_group.lab.name
-
-  security_rule {
-    name                       = "allow-http-from-internet"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "allow-azure-load-balancer-probes"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "AzureLoadBalancer"
-    destination_address_prefix = "*"
-  }
+module "nics" {
+  source              = "./modules/compute/nics"
+  nic_name            = var.nic_name
+  windows_nic_name    = var.windows_nic_name
+  create_windows_vm   = var.create_windows_vm
+  resource_group_name = module.resource_group.name
+  location            = module.resource_group.location
+  subnet_id           = module.subnet.id
 }
 
-resource "azurerm_network_interface" "web" {
-  name                = var.nic_name
-  location            = azurerm_resource_group.lab.location
-  resource_group_name = azurerm_resource_group.lab.name
-
-  ip_configuration {
-    name                          = "primary"
-    subnet_id                     = azurerm_subnet.web.id
-    private_ip_address_allocation = "Dynamic"
-  }
+module "nsg" {
+  source              = "./modules/network/nsg"
+  nsg_name            = var.nsg_name
+  resource_group_name = module.resource_group.name
+  location            = module.resource_group.location
+  linux_nic_id        = module.nics.linux_nic_id
+  windows_nic_id      = module.nics.windows_nic_id
+  create_windows_vm   = var.create_windows_vm
 }
 
-resource "azurerm_network_interface_security_group_association" "web" {
-  network_interface_id      = azurerm_network_interface.web.id
-  network_security_group_id = azurerm_network_security_group.web.id
+module "os_disk" {
+  source = "./modules/compute/storage"
 }
 
-resource "azurerm_public_ip" "lb" {
-  name                = var.load_balancer_public_ip_name
-  location            = azurerm_resource_group.lab.location
-  resource_group_name = azurerm_resource_group.lab.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
+module "data_disks" {
+  source              = "./modules/compute/storage"
+  resource_group_name = module.resource_group.name
+  location            = module.resource_group.location
+  vm_name             = var.vm_name
+  data_disk_count     = var.data_disk_count
+  data_disk_size_gb   = var.data_disk_size_gb
+  create_data_disks   = true
 }
 
-resource "azurerm_lb" "public" {
-  name                = var.load_balancer_name
-  location            = azurerm_resource_group.lab.location
-  resource_group_name = azurerm_resource_group.lab.name
-  sku                 = "Standard"
-
-  frontend_ip_configuration {
-    name                 = "public-frontend"
-    public_ip_address_id = azurerm_public_ip.lb.id
-  }
+module "load_balancer" {
+  source                       = "./modules/load-balancer"
+  resource_group_name           = module.resource_group.name
+  location                      = module.resource_group.location
+  load_balancer_name            = var.load_balancer_name
+  load_balancer_public_ip_name  = var.load_balancer_public_ip_name
+  linux_nic_id                  = module.nics.linux_nic_id
+  linux_nic_ip_configuration_name = module.nics.linux_ip_configuration_name
 }
 
-resource "azurerm_lb_backend_address_pool" "web" {
-  name            = "web-backend-pool"
-  loadbalancer_id = azurerm_lb.public.id
-}
-
-resource "azurerm_network_interface_backend_address_pool_association" "web" {
-  network_interface_id    = azurerm_network_interface.web.id
-  ip_configuration_name   = "primary"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.web.id
-}
-
-resource "azurerm_lb_probe" "http" {
-  name                = "http-health-probe"
-  loadbalancer_id     = azurerm_lb.public.id
-  protocol            = "Http"
-  port                = 80
-  request_path        = "/"
-  interval_in_seconds = 15
-  number_of_probes    = 2
-}
-
-resource "azurerm_lb_rule" "http" {
-  name                           = "http-rule"
-  loadbalancer_id                = azurerm_lb.public.id
-  protocol                       = "Tcp"
-  frontend_port                  = 80
-  backend_port                   = 80
-  frontend_ip_configuration_name = "public-frontend"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.web.id]
-  probe_id                       = azurerm_lb_probe.http.id
-  disable_outbound_snat          = true
-}
-
-# The explicit outbound rule gives the private VM outbound internet access
-# for package installation without assigning the VM its own public IP.
-resource "azurerm_lb_outbound_rule" "web_egress" {
-  name                     = "web-egress"
-  loadbalancer_id          = azurerm_lb.public.id
-  protocol                 = "All"
-  backend_address_pool_id  = azurerm_lb_backend_address_pool.web.id
-  allocated_outbound_ports = 1024
-
-  frontend_ip_configuration {
-    name = "public-frontend"
-  }
-}
-
-resource "azurerm_linux_virtual_machine" "web" {
-  name                            = var.vm_name
-  computer_name                   = substr(var.vm_name, 0, 15)
-  resource_group_name             = azurerm_resource_group.lab.name
-  location                        = azurerm_resource_group.lab.location
-  size                            = var.vm_size
-  admin_username                  = var.admin_username
-  disable_password_authentication = true
-  network_interface_ids           = [azurerm_network_interface.web.id]
-  custom_data = base64encode(<<-CUSTOMDATA
-    #!/bin/bash
-    set -eux
-    apt-get update
-    apt-get install -y nginx
-    systemctl enable nginx
-    systemctl start nginx
-    printf '%s\n' '<h1>Azure backend - ${var.vm_name}</h1>' > /var/www/html/index.html
-  CUSTOMDATA
-  )
-
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = trimspace(var.admin_ssh_public_key)
-  }
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
-  }
-
+module "vms" {
+  source                 = "./modules/compute/vms"
+  vm_name               = var.vm_name
+  vm_size               = var.vm_size
+  admin_username        = var.admin_username
+  admin_ssh_public_key  = var.admin_ssh_public_key
+  resource_group_name   = module.resource_group.name
+  location              = module.resource_group.location
+  linux_nic_id          = module.nics.linux_nic_id
+  os_disk_settings      = module.os_disk.os_disk_settings
+  windows_nic_id        = module.nics.windows_nic_id
+  create_windows_vm     = var.create_windows_vm
+  windows_vm_name       = var.windows_vm_name
+  windows_vm_size       = var.windows_vm_size
+  windows_admin_username = var.windows_admin_username
+  windows_admin_password = var.windows_admin_password
+  data_disk_ids         = module.data_disks.data_disk_ids
   depends_on = [
-    azurerm_network_interface_security_group_association.web,
-    azurerm_network_interface_backend_address_pool_association.web,
-    azurerm_lb_outbound_rule.web_egress
+    module.nsg,
+    module.load_balancer
   ]
 }
