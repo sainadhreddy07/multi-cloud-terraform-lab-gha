@@ -23,12 +23,19 @@ variable "windows_nic_id" { type = string }
 variable "create_windows_vm" { type = bool }
 variable "windows_vm_name" { type = string }
 variable "windows_vm_size" { type = string }
-variable "windows_admin_username" { type = string }
+
+variable "windows_admin_username" {
+  description = "Temporary Windows VM administrator username"
+  type        = string
+  sensitive   = true
+  default     = "azdmoduser"
+}
 
 variable "windows_admin_password" {
-  type      = string
-  sensitive = true
-  default   = null
+  description = "Temporary Windows VM administrator password"
+  type        = string
+  sensitive   = true
+  default     = "LabWin@2026Test"
 }
 
 variable "data_disk_ids" {
