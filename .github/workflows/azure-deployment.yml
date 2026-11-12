@@ -31,7 +31,7 @@ env:
   ARM_SAS_TOKEN: ${{ secrets.AZURE_TFSTATE_SAS_TOKEN }}
 
   TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-  TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}S
+  TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
   TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
   TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
   TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
