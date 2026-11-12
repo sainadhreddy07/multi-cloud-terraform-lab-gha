@@ -45,7 +45,7 @@ resource "azurerm_linux_virtual_machine" "linux" {
 
 
 # Optional data-disk attachments. The disks are created by modules/compute/storage/data-disks.tf.
-resource "azurerm_virtual_machine_data_disk_attachment" "data" {
+resource "azurerm_virtual_machine_data_disk_attachment" "linux_data" {
   count              = length(var.data_disk_ids)
   managed_disk_id    = var.data_disk_ids[count.index]
   virtual_machine_id = azurerm_linux_virtual_machine.linux.id
