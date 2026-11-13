@@ -29,7 +29,7 @@ resource "aws_security_group" "instance" {
   }
 
   dynamic "ingress" {
-    for_each = var.allowed_ssh_cidr == null ? [] : [var.allowed_ssh_cidr]
+    for_each = (var.allowed_ssh_cidr == null || trimspace(var.allowed_ssh_cidr) == "" ) ? [] : [var.allowed_ssh_cidr]
 
     content {
       from_port   = 22
