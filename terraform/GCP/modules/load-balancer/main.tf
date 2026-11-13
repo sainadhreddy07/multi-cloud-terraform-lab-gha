@@ -2,7 +2,7 @@
 resource "google_compute_instance_group" "web" {
   name      = "${var.name}-ig"
   zone      = var.zone
-  instances = [google_compute_instance.web.self_link]
+  instances = ["projects/${var.project_id}/zones/${var.zone}/instances/${var.instance_name}"]
 
   named_port {
     name = "http"
