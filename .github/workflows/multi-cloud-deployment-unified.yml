@@ -1,4 +1,4 @@
-name: Unified Multi-Cloud Terraform Deployment
+name: Multi-Cloud Terraform Deployment
 run-name: "Multi-cloud ${{ inputs.cloud }} / ${{ inputs.operation }}"
 
 on:
@@ -153,7 +153,7 @@ jobs:
             echo "TF_VAR_subnet_cidr=$TF_VAR_subnet_cidr"
             echo "TF_VAR_machine_type=$TF_VAR_machine_type"
           } >> "$GITHUB_ENV"
-           
+
       - uses: google-github-actions/auth@v2
         if: matrix.cloud == 'gcp'
         with:
