@@ -1,16 +1,22 @@
 resource "google_compute_instance" "web" {
-  name = "${var.name}-web"
-  project = var.project_id
-  zone = var.zone
+  name         = "${var.name}-web"
+  project      = var.project_id
+  zone         = var.zone
   machine_type = var.machine_type
-  tags = ["${var.name}-web"]
+  tags         = ["${var.name}-web"]
+
   boot_disk {
-    initialize_params { image = "debian-cloud/debian-12"; size = 10 }
+    initialize_params {
+      image = "debian-cloud/debian-12"
+      size  = 10
+    }
   }
+
   network_interface {
     subnetwork = var.subnet_self_link
     access_config {}
   }
+
   metadata_startup_script = <<-SCRIPT
     #!/bin/bash
     set -eux
