@@ -174,9 +174,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$OPERATION" == "destroy" ]]; then
-            terraform plan -destroy -input=false -lock-timeout=5m -out=tfplan
+            terraform plan -destroy -input=false -lock=false -out=tfplan
           else
-            terraform plan -input=false -lock-timeout=5m -out=tfplan
+            terraform plan -input=false -lock=false -out=tfplan
           fi
       - run: terraform show -no-color tfplan
       - uses: actions/upload-artifact@v4
@@ -252,7 +252,7 @@ jobs:
             echo "TF_VAR_load_balancer_name=$AZURE_LB_NAME"
             echo "TF_VAR_load_balancer_public_ip_name=$AZURE_LB_PUBLIC_IP_NAME"
           } >> "$GITHUB_ENV"
-           
+
       - uses: azure/login@v2
         if: matrix.cloud == 'azure'
         with:
@@ -323,7 +323,7 @@ jobs:
           name: tfplan-${{ matrix.cloud }}-${{ inputs.operation }}
           path: ${{ matrix.cloud == 'azure' && 'terraform/Azure' || matrix.cloud == 'aws' && 'terraform/AWS' || 'terraform/GCP' }}
       - name: Execute reviewed plan
-        run: terraform apply -input=false -lock-timeout=5m tfplan
+        run: terraform apply -input=false -lock=false tfplan
       - name: Terraform outputs (Apply only)
         if: inputs.operation == 'apply'
         run: terraform output
