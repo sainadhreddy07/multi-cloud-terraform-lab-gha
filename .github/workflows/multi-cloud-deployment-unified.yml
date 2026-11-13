@@ -143,6 +143,17 @@ jobs:
           for n in TF_VAR_project_id TF_VAR_region TF_VAR_zone TF_VAR_name TF_VAR_network_cidr TF_VAR_subnet_cidr TF_VAR_machine_type GCP_WORKLOAD_IDENTITY_PROVIDER GCP_TERRAFORM_SERVICE_ACCOUNT; do
             [[ -n "${!n:-}" ]] || { echo "::error::$n is empty"; exit 1; }
           done
+
+          {
+            echo "TF_VAR_project_id=$TF_VAR_project_id"
+            echo "TF_VAR_region=$TF_VAR_region"
+            echo "TF_VAR_zone=$TF_VAR_zone"
+            echo "TF_VAR_name=$TF_VAR_name"
+            echo "TF_VAR_network_cidr=$TF_VAR_network_cidr"
+            echo "TF_VAR_subnet_cidr=$TF_VAR_subnet_cidr"
+            echo "TF_VAR_machine_type=$TF_VAR_machine_type"
+          } >> "$GITHUB_ENV"
+           
       - uses: google-github-actions/auth@v2
         if: matrix.cloud == 'gcp'
         with:
@@ -300,6 +311,18 @@ jobs:
           for n in TF_VAR_project_id TF_VAR_region TF_VAR_zone TF_VAR_name TF_VAR_network_cidr TF_VAR_subnet_cidr TF_VAR_machine_type GCP_WORKLOAD_IDENTITY_PROVIDER GCP_TERRAFORM_SERVICE_ACCOUNT; do
             [[ -n "${!n:-}" ]] || { echo "::error::$n is empty"; exit 1; }
           done
+
+          {
+            echo "TF_VAR_project_id=$TF_VAR_project_id"
+            echo "TF_VAR_region=$TF_VAR_region"
+            echo "TF_VAR_zone=$TF_VAR_zone"
+            echo "TF_VAR_name=$TF_VAR_name"
+            echo "TF_VAR_network_cidr=$TF_VAR_network_cidr"
+            echo "TF_VAR_subnet_cidr=$TF_VAR_subnet_cidr"
+            echo "TF_VAR_machine_type=$TF_VAR_machine_type"
+          } >> "$GITHUB_ENV"
+
+
       - uses: google-github-actions/auth@v2
         if: matrix.cloud == 'gcp'
         with:
