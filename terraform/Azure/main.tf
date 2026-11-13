@@ -26,7 +26,7 @@ module "nics" {
   source              = "./modules/compute/nics"
   nic_name            = var.nic_name
   windows_nic_name    = var.windows_nic_name
-  create_windows_vm   = var.create_windows_vm
+  create_windows_vm   = false
   resource_group_name = module.resource_group.name
   location            = module.resource_group.location
   subnet_id           = module.subnet.id
@@ -39,7 +39,7 @@ module "nsg" {
   location            = module.resource_group.location
   linux_nic_id        = module.nics.linux_nic_id
   windows_nic_id      = module.nics.windows_nic_id
-  create_windows_vm   = var.create_windows_vm
+  create_windows_vm   = false
 }
 
 module "os_disk" {
@@ -77,7 +77,7 @@ module "vms" {
   linux_nic_id           = module.nics.linux_nic_id
   os_disk_settings       = module.os_disk.os_disk_settings
   windows_nic_id         = module.nics.windows_nic_id
-  create_windows_vm      = var.create_windows_vm
+  create_windows_vm      = false
   windows_vm_name        = var.windows_vm_name
   windows_vm_size        = var.windows_vm_size
   windows_admin_username = var.windows_admin_username
