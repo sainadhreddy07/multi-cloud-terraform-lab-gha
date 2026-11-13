@@ -23,11 +23,6 @@ variable "instance_type" {
   default = "t3.micro"
 }
 
-variable "ami_id" {
-  description = "Valid Linux AMI ID in aws_region"
-  type        = string
-}
-
 variable "key_name" {
   description = "Existing EC2 key pair name optional if SSH is disabled"
   type        = string
