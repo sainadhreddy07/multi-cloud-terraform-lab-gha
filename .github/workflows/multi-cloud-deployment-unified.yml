@@ -50,25 +50,44 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
           ARM_SAS_TOKEN: ${{ secrets.AZURE_TFSTATE_SAS_TOKEN }}
-          TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-          TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
-          TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
-          TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
-          TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
-          TF_VAR_admin_ssh_public_key: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
-          TF_VAR_vnet_name: ${{ vars.AZURE_VNET_NAME }}
-          TF_VAR_vnet_cidr: ${{ vars.AZURE_VNET_CIDR }}
-          TF_VAR_subnet_name: ${{ vars.AZURE_SUBNET_NAME }}
-          TF_VAR_subnet_cidr: ${{ vars.AZURE_SUBNET_CIDR }}
-          TF_VAR_nsg_name: ${{ vars.AZURE_NSG_NAME }}
-          TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
-          TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
-          TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+          AZURE_VM_SIZE: ${{ vars.AZURE_VM_SIZE }}
+          AZURE_ADMIN_USERNAME: ${{ vars.AZURE_ADMIN_USERNAME }}
+          AZURE_SSH_PUBLIC_KEY: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
+          AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+          AZURE_VNET_CIDR: ${{ vars.AZURE_VNET_CIDR }}
+          AZURE_SUBNET_NAME: ${{ vars.AZURE_SUBNET_NAME }}
+          AZURE_SUBNET_CIDR: ${{ vars.AZURE_SUBNET_CIDR }}
+          AZURE_NSG_NAME: ${{ vars.AZURE_NSG_NAME }}
+          AZURE_NIC_NAME: ${{ vars.AZURE_NIC_NAME }}
+          AZURE_LB_NAME: ${{ vars.AZURE_LB_NAME }}
+          AZURE_LB_PUBLIC_IP_NAME: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
         run: |
           set -euo pipefail
-          for n in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID ARM_SAS_TOKEN TF_VAR_location TF_VAR_resource_group_name TF_VAR_vm_name TF_VAR_vm_size TF_VAR_admin_username TF_VAR_admin_ssh_public_key TF_VAR_vnet_name TF_VAR_vnet_cidr TF_VAR_subnet_name TF_VAR_subnet_cidr TF_VAR_nsg_name TF_VAR_nic_name TF_VAR_load_balancer_name TF_VAR_load_balancer_public_ip_name; do
+          required=(ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID ARM_SAS_TOKEN AZURE_LOCATION AZURE_RESOURCE_GROUP_NAME AZURE_VM_NAME AZURE_VM_SIZE AZURE_ADMIN_USERNAME AZURE_SSH_PUBLIC_KEY AZURE_VNET_NAME AZURE_VNET_CIDR AZURE_SUBNET_NAME AZURE_SUBNET_CIDR AZURE_NSG_NAME AZURE_NIC_NAME AZURE_LB_NAME AZURE_LB_PUBLIC_IP_NAME)
+          for n in "${required[@]}"; do
             [[ -n "${!n:-}" ]] || { echo "::error::$n is empty"; exit 1; }
           done
+       
+          {
+            echo "TF_VAR_location=$AZURE_LOCATION"
+            echo "TF_VAR_resource_group_name=$AZURE_RESOURCE_GROUP_NAME"
+            echo "TF_VAR_vm_name=$AZURE_VM_NAME"
+            echo "TF_VAR_vm_size=$AZURE_VM_SIZE"
+            echo "TF_VAR_admin_username=$AZURE_ADMIN_USERNAME"
+            echo "TF_VAR_admin_ssh_public_key=$AZURE_SSH_PUBLIC_KEY"
+            echo "TF_VAR_vnet_name=$AZURE_VNET_NAME"
+            echo "TF_VAR_vnet_cidr=$AZURE_VNET_CIDR"
+            echo "TF_VAR_subnet_name=$AZURE_SUBNET_NAME"
+            echo "TF_VAR_subnet_cidr=$AZURE_SUBNET_CIDR"
+            echo "TF_VAR_nsg_name=$AZURE_NSG_NAME"
+            echo "TF_VAR_nic_name=$AZURE_NIC_NAME"
+            echo "TF_VAR_load_balancer_name=$AZURE_LB_NAME"
+            echo "TF_VAR_load_balancer_public_ip_name=$AZURE_LB_PUBLIC_IP_NAME"
+          } >> "$GITHUB_ENV"
+
       - uses: azure/login@v2
         if: matrix.cloud == 'azure'
         with:
@@ -197,25 +216,43 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC: "true"
           ARM_SAS_TOKEN: ${{ secrets.AZURE_TFSTATE_SAS_TOKEN }}
-          TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-          TF_VAR_resource_group_name: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
-          TF_VAR_vm_name: ${{ vars.AZURE_VM_NAME }}
-          TF_VAR_vm_size: ${{ vars.AZURE_VM_SIZE }}
-          TF_VAR_admin_username: ${{ vars.AZURE_ADMIN_USERNAME }}
-          TF_VAR_admin_ssh_public_key: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
-          TF_VAR_vnet_name: ${{ vars.AZURE_VNET_NAME }}
-          TF_VAR_vnet_cidr: ${{ vars.AZURE_VNET_CIDR }}
-          TF_VAR_subnet_name: ${{ vars.AZURE_SUBNET_NAME }}
-          TF_VAR_subnet_cidr: ${{ vars.AZURE_SUBNET_CIDR }}
-          TF_VAR_nsg_name: ${{ vars.AZURE_NSG_NAME }}
-          TF_VAR_nic_name: ${{ vars.AZURE_NIC_NAME }}
-          TF_VAR_load_balancer_name: ${{ vars.AZURE_LB_NAME }}
-          TF_VAR_load_balancer_public_ip_name: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+          AZURE_VM_SIZE: ${{ vars.AZURE_VM_SIZE }}
+          AZURE_ADMIN_USERNAME: ${{ vars.AZURE_ADMIN_USERNAME }}
+          AZURE_SSH_PUBLIC_KEY: ${{ secrets.AZURE_SSH_PUBLIC_KEY }}
+          AZURE_VNET_NAME: ${{ vars.AZURE_VNET_NAME }}
+          AZURE_VNET_CIDR: ${{ vars.AZURE_VNET_CIDR }}
+          AZURE_SUBNET_NAME: ${{ vars.AZURE_SUBNET_NAME }}
+          AZURE_SUBNET_CIDR: ${{ vars.AZURE_SUBNET_CIDR }}
+          AZURE_NSG_NAME: ${{ vars.AZURE_NSG_NAME }}
+          AZURE_NIC_NAME: ${{ vars.AZURE_NIC_NAME }}
+          AZURE_LB_NAME: ${{ vars.AZURE_LB_NAME }}
+          AZURE_LB_PUBLIC_IP_NAME: ${{ vars.AZURE_LB_PUBLIC_IP_NAME }}
         run: |
           set -euo pipefail
-          for n in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID ARM_SAS_TOKEN TF_VAR_location TF_VAR_resource_group_name TF_VAR_vm_name TF_VAR_vm_size TF_VAR_admin_username TF_VAR_admin_ssh_public_key TF_VAR_vnet_name TF_VAR_vnet_cidr TF_VAR_subnet_name TF_VAR_subnet_cidr TF_VAR_nsg_name TF_VAR_nic_name TF_VAR_load_balancer_name TF_VAR_load_balancer_public_ip_name; do
+          required=(ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID ARM_SAS_TOKEN AZURE_LOCATION AZURE_RESOURCE_GROUP_NAME AZURE_VM_NAME AZURE_VM_SIZE AZURE_ADMIN_USERNAME AZURE_SSH_PUBLIC_KEY AZURE_VNET_NAME AZURE_VNET_CIDR AZURE_SUBNET_NAME AZURE_SUBNET_CIDR AZURE_NSG_NAME AZURE_NIC_NAME AZURE_LB_NAME AZURE_LB_PUBLIC_IP_NAME)
+          for n in "${required[@]}"; do
             [[ -n "${!n:-}" ]] || { echo "::error::$n is empty"; exit 1; }
           done
+          {
+            echo "TF_VAR_location=$AZURE_LOCATION"
+            echo "TF_VAR_resource_group_name=$AZURE_RESOURCE_GROUP_NAME"
+            echo "TF_VAR_vm_name=$AZURE_VM_NAME"
+            echo "TF_VAR_vm_size=$AZURE_VM_SIZE"
+            echo "TF_VAR_admin_username=$AZURE_ADMIN_USERNAME"
+            echo "TF_VAR_admin_ssh_public_key=$AZURE_SSH_PUBLIC_KEY"
+            echo "TF_VAR_vnet_name=$AZURE_VNET_NAME"
+            echo "TF_VAR_vnet_cidr=$AZURE_VNET_CIDR"
+            echo "TF_VAR_subnet_name=$AZURE_SUBNET_NAME"
+            echo "TF_VAR_subnet_cidr=$AZURE_SUBNET_CIDR"
+            echo "TF_VAR_nsg_name=$AZURE_NSG_NAME"
+            echo "TF_VAR_nic_name=$AZURE_NIC_NAME"
+            echo "TF_VAR_load_balancer_name=$AZURE_LB_NAME"
+            echo "TF_VAR_load_balancer_public_ip_name=$AZURE_LB_PUBLIC_IP_NAME"
+          } >> "$GITHUB_ENV"
+           
       - uses: azure/login@v2
         if: matrix.cloud == 'azure'
         with:
