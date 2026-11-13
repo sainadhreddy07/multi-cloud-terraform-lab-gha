@@ -7,67 +7,96 @@ on:
         required: true
         default: plan
         options: [plan, apply, destroy]
+
 permissions:
   contents: read
   id-token: write
+
 concurrency:
   group: terraform-gcp-state
   cancel-in-progress: false
+
+
 jobs:
   plan:
     if: ${{ inputs.operation == 'plan' || inputs.operation == 'apply' }}
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: terraform/GCP } }
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: 1.9.8 }
+
       - run: terraform fmt -check -recursive
       - run: terraform init
       - run: terraform validate
       - run: terraform plan -out=tfplan
+
         env:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION }}
           TF_VAR_zone: ${{ vars.GCP_ZONE }}
+          TF_VAR_name: ${{ vars.GCP_VM_NAME }}
+          TF_VAR_machine_type: ${{ vars.GCP_MACHINE_TYPE }}
+          TF_VAR_subnet_cidr: ${{ vars.GCP_SUBNET_CIDR }}
+
       - uses: actions/upload-artifact@v4
         with: { name: gcp-tfplan, path: terraform/GCP/tfplan, retention-days: 1 }
+
+
   apply:
     if: ${{ inputs.operation == 'apply' }}
     needs: plan
     runs-on: ubuntu-latest
+
     environment: gcp-terraform-apply
     defaults: { run: { working-directory: terraform/GCP } }
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: 1.9.8 }
+
       - run: terraform init
+
       - uses: actions/download-artifact@v4
         with: { name: gcp-tfplan, path: terraform/GCP }
+
       - run: terraform apply -input=false tfplan
       - run: terraform output
+
+
   destroy:
     if: ${{ inputs.operation == 'destroy' }}
     runs-on: ubuntu-latest
+
     environment: gcp-terraform-destroy
     defaults: { run: { working-directory: terraform/GCP } }
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: 1.9.8 }
+
       - run: terraform init
       - run: terraform plan -destroy -out=tf-destroy-plan
       - run: terraform apply -input=false tf-destroy-plan
