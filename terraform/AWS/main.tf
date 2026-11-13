@@ -12,10 +12,14 @@ module "security" {
   allowed_ssh_cidr = var.allowed_ssh_cidr
 }
 
+data "aws_ssm_parameter" "amazon_linux_2023" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 module "compute" {
   source            = "./modules/compute/ec2"
   name              = var.name
-  ami_id            = var.ami_id
+  ami_id            = data.aws_ssm_parameter.amazon_linux_2023.value
   instance_type     = var.instance_type
   subnet_id         = module.network.public_subnet_ids[0]
   security_group_id = module.security.instance_sg_id
