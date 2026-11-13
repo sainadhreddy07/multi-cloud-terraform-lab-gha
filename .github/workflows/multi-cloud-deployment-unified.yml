@@ -25,6 +25,8 @@ jobs:
   plan:
     name: "Plan - ${{ matrix.cloud }}"
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ matrix.cloud == 'azure' && (inputs.operation == 'destroy' && 'terraform-destroy' || 'terraform-apply') || matrix.cloud == 'aws' && (inputs.operation == 'destroy' && 'aws-terraform-destroy' || 'aws-terraform-apply') || (inputs.operation == 'destroy' && 'gcp-terraform-destroy' || 'gcp-terraform-apply') }}
     strategy:
       fail-fast: false
       matrix:
