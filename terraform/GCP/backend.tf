@@ -1,15 +1,8 @@
-terraform {
-  required_version = ">= 1.10.0, < 2.0.0"
-
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "= 8.9.0"
-    }
-  }
-
-  backend "gcs" {
-    bucket = "mc-infra-gcp-tfstate-001"
-    prefix = "multi-cloud-terraform-lab-gha/gcp"
-  }
-}
+# Configure GCS backend after bucket bootstrap.
+# Uncomment and replace bucket name before terraform init.
+# terraform {
+#   backend "gcs" {
+#     bucket = "REPLACE_WITH_STATE_BUCKET"
+#     prefix = "nested-modules/gcp"
+#   }
+# }

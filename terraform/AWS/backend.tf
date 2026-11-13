@@ -1,19 +1,11 @@
-terraform {
-  required_version = ">= 1.10.0, < 2.0.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "= 6.72.0"
-    }
-  }
-
-  backend "s3" {
-    bucket = "multicloudbucket001"
-    key    = "multi-cloud-terraform-lab-gha/aws/terraform.tfstate"
-    region = "ap-south-1"
-
-    encrypt      = true
-    use_lockfile = true
-  }
-}
+# Configure S3 backend only after bootstrap bucket exists.
+# Uncomment and fill values before terraform init.
+# terraform {
+#   backend "s3" {
+#     bucket       = "REPLACE_WITH_STATE_BUCKET"
+#     key          = "nested-modules/aws/terraform.tfstate"
+#     region       = "REPLACE_WITH_BUCKET_REGION"
+#     encrypt      = true
+#     use_lockfile = true
+#   }
+# }

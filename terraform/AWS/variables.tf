@@ -1,49 +1,8 @@
-variable "region" {
-  description = "AWS region for the lab."
-  type        = string
-}
-
-variable "project_name" {
-  description = "Short project prefix used in AWS resource names and tags."
-  type        = string
-}
-
-variable "vpc_cidr" {
-  description = "VPC CIDR block."
-  type        = string
-}
-
-variable "public_subnet_1_cidr" {
-  description = "CIDR block for the first public subnet."
-  type        = string
-}
-
-variable "public_subnet_2_cidr" {
-  description = "CIDR block for the second public subnet."
-  type        = string
-}
-
-variable "instance_type" {
-  description = "EC2 instance type available in the selected region and account."
-  type        = string
-}
-
-variable "instance_name" {
-  description = "EC2 instance name tag."
-  type        = string
-}
-
-variable "alb_name" {
-  description = "Application Load Balancer name (AWS naming length/character limits apply)."
-  type        = string
-}
-
-variable "target_group_name" {
-  description = "ALB target group name (AWS naming length/character limits apply)."
-  type        = string
-}
-
-variable "allowed_http_cidr" {
-  description = "IPv4 CIDR allowed to reach the public ALB listener, normally 0.0.0.0/0 for this HTTP lab."
-  type        = string
-}
+variable "aws_region" { type = string; default = "us-east-1" }
+variable "name" { type = string; default = "nested-lab" }
+variable "vpc_cidr" { type = string; default = "10.20.0.0/16" }
+variable "public_subnet_cidrs" { type = list(string); default = ["10.20.1.0/24", "10.20.2.0/24"] }
+variable "instance_type" { type = string; default = "t3.micro" }
+variable "ami_id" { description = "Valid Linux AMI ID in aws_region"; type = string }
+variable "key_name" { description = "Existing EC2 key pair name; optional if SSH is disabled"; type = string; default = null }
+variable "allowed_ssh_cidr" { description = "Your public IP /32; set null to disable SSH"; type = string; default = null }

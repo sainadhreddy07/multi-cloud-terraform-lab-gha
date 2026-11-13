@@ -1,23 +1,3 @@
-output "project_id" {
-  value = var.project_id
-}
-
-output "vm_name" {
-  value = google_compute_instance.web.name
-}
-
-output "vm_private_ip" {
-  value = google_compute_instance.web.network_interface[0].network_ip
-}
-
-output "vm_external_ip" {
-  value = google_compute_instance.web.network_interface[0].access_config[0].nat_ip
-}
-
-output "load_balancer_ip" {
-  value = google_compute_global_address.web.address
-}
-
-output "load_balancer_url" {
-  value = "http://${google_compute_global_address.web.address}"
-}
+output "vm_name" { value = module.compute.instance_name }
+output "vm_internal_ip" { value = module.compute.internal_ip }
+output "http_url" { value = module.load_balancer.http_url }
