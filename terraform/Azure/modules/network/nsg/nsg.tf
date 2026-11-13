@@ -32,8 +32,3 @@ resource "azurerm_network_interface_security_group_association" "linux" {
   network_interface_id      = var.linux_nic_id
   network_security_group_id = azurerm_network_security_group.web.id
 }
-
-resource "azurerm_network_interface_security_group_association" "windows" {
-  network_interface_id      = var.windows_nic_id
-  network_security_group_id = azurerm_network_security_group.web.id
-}

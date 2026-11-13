@@ -56,38 +56,6 @@ variable "load_balancer_public_ip_name" {
   type        = string
 }
 
-# Optional Windows expansion; defaults keep the current Linux-only lab unchanged.
-variable "create_windows_vm" {
-  description = "Enable the optional Windows VM/NIC example."
-  type        = bool
-  default     = false
-}
-variable "windows_vm_name" {
-  description = "Name of optional Windows VM."
-  type        = string
-  default     = "vm-windows-lab"
-}
-variable "windows_vm_size" {
-  description = "SKU for optional Windows VM."
-  type        = string
-  default     = "Standard_B2s"
-}
-variable "windows_admin_username" {
-  description = "Administrator username for optional Windows VM."
-  type        = string
-  default     = "azureadmin"
-}
-variable "windows_admin_password" {
-  description = "Administrator password for the Windows VM."
-  type        = string
-  sensitive   = true
-  nullable    = false
-}
-variable "windows_nic_name" {
-  description = "NIC name for optional Windows VM."
-  type        = string
-  default     = "nic-windows-lab"
-}
 variable "data_disk_count" {
   description = "Number of optional managed data disks to create and attach to Linux VM."
   type        = number
