@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cloud: ${{ fromJSON(inputs.cloud == 'all' && '[\"azure\",\"aws\",\"gcp\"]' || format('[\"{0}\"]', inputs.cloud)) }}
+        cloud: ${{ fromJSON(inputs.cloud == 'all' && '["azure","aws","gcp"]' || format('[\"{0}\"]', inputs.cloud)) }}
     concurrency:
       group: terraform-${{ matrix.cloud }}-state
       cancel-in-progress: false
@@ -176,7 +176,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cloud: ${{ fromJSON(inputs.cloud == 'all' && '[\"azure\",\"aws\",\"gcp\"]' || format('[\"{0}\"]', inputs.cloud)) }}
+        cloud: ${{ fromJSON(inputs.cloud == 'all' && '["azure","aws","gcp"]' || format('[\"{0}\"]', inputs.cloud)) }}
     environment:
       name: ${{ matrix.cloud == 'azure' && (inputs.operation == 'destroy' && 'terraform-destroy' || 'terraform-apply') || matrix.cloud == 'aws' && (inputs.operation == 'destroy' && 'aws-terraform-destroy' || 'aws-terraform-apply') || (inputs.operation == 'destroy' && 'gcp-terraform-destroy' || 'gcp-terraform-apply') }}
     concurrency:
