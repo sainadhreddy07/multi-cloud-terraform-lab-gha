@@ -26,5 +26,5 @@ module "load_balancer" {
   region        = var.region
   zone          = var.zone
   network_name  = module.network.network_name
-  instance_name = module.compute.instance_name
+  instance_self_link = module.compute.instance_self_link
 }
