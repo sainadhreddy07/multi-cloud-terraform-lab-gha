@@ -1,11 +1,12 @@
 resource "azurerm_windows_virtual_machine" "windows" {
+  count = var.create_windows_vm ? 1 : 0
+
   name          = var.windows_vm_name
   computer_name = substr(var.windows_vm_name, 0, 15)
 
   resource_group_name = var.resource_group_name
-
-  location = var.location
-  size     = var.windows_vm_size
+  location            = var.location
+  size                = var.windows_vm_size
 
   admin_username = var.windows_admin_username
   admin_password = var.windows_admin_password
@@ -26,11 +27,11 @@ resource "azurerm_windows_virtual_machine" "windows" {
   }
 }
 
-# Optional data-disk attachments. The disks are created by modules/compute/storage/data-disks.tf.
 resource "azurerm_virtual_machine_data_disk_attachment" "win_data" {
-  count              = length(var.data_disk_ids)
+  count = var.create_windows_vm ? length(var.data_disk_ids) : 0
+
   managed_disk_id    = var.data_disk_ids[count.index]
-  virtual_machine_id = azurerm_windows_virtual_machine.windows.id
+  virtual_machine_id = azurerm_windows_virtual_machine.windows[0].id
   lun                = count.index
   caching            = "ReadWrite"
 }
